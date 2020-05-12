@@ -49,7 +49,7 @@ res: [filter]: (数学,95),(数学,90)
 
 对RDD进行去重操作。由于重复数据可能分散在不同的partition里面，因此需要进行shuffle操作，但是shuffle操作需要的是(K, V)类型的数据，因此对于非只有Key的数据，会先用map方法进行转换，K -> (K, Null)，然后利用reduceByKey算子，进行shuffle，首先在map端进行combine去重，然后reduce生成shuffleRDD，再使用mapRepartition()操作进一步去重，生成mapRepartitionRDD，最后只保留key，转换成MappedRDD。
 
-![](spark 核心RDD操作学习.assets/distinct.png)
+![distinct](spark 核心RDD操作学习.assets/distinct.png)
 
 ### 4. flatMap
 
