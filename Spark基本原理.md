@@ -6,7 +6,7 @@
 
 ​		spark是UC Berkeley AMP Lab（加州大学伯克利分校AMP实验室）所开源的类Hadoop MapReduce通用并行框架，专门用于大数据的迭代计算。spark的整个生态目前包括了四个计算框架，如图所示：
 
-<img src="https://pic4.zhimg.com/80/v2-da06e65a91307133d6c5e3003cf8f40b_1440w.jpg" alt="img" style="zoom:50%;" />
+<img src=".assets/v2-da06e65a91307133d6c5e3003cf8f40b_1440w.jpg" alt="img" style="zoom:50%;" />
 
 * **spark** **SQL**：提供了非常丰富的类SQL的查询，RDD/DataFrame
 * **spark streaming**：流式计算，主要用于处理线上实时时序数据
@@ -17,7 +17,7 @@
 
 ​		具体区别：
 
-<img src="https://pic3.zhimg.com/80/v2-351cc2f582f83199f16e1a23fd22bc1a_1440w.jpg" alt="img" style="zoom:50%;" />
+<img src=".assets/v2-351cc2f582f83199f16e1a23fd22bc1a_1440w.jpg" alt="img" style="zoom:50%;" />
 
 
 
@@ -43,7 +43,7 @@
 
 spark根据application中的action operation会创建不同的jobs，每一个jobs又会根据shuffle划分成不同的stages，每个stage执行一部分代码片段，并创建一批task，分发到各个executor上去执行。每一个Worker节点上存在一个或多个Executor进程，该对象拥有一个线性池，每个线程负责一个Task任务的执行。根据 Executor 上 CPU-core 的数量，其每个时间可以并行多个跟 core 一样数量的 Task。**Task 任务即为具体执行的 Spark 程序的任务.**
 
-<img src="http://sharkdtu.com/images/spark-submit-time.png" alt="spark-submit-time" style="zoom:80%;" />
+<img src=".assets/spark-submit-time.png" alt="spark-submit-time" style="zoom:80%;" />
 
 		* 用户通过spark-submit提交application后，通过client向ResourceManager请求启动一个Application，同时检查是否有足够的资源满足Application的需求，如果满足，准备ApplicationMaster启动的上下文，交给ResourceManager，并循环监控Application状态。
 		* 当提交的队列资源充分时，ResourceManager会启动ApplicationMaster，ApplicationMaster会单独启动Driver后台进程，Driver进程用于运行Application的main()函数，启动成功后，ApplicationMaster收到连接并开始向ResourceManager申请containers资源，当ResourceManager收到申请后会返回Container资源，并在对应的Container上启动Executor执行单元，执行单元启动成功后由Driver往Executor分发相应的task。
@@ -62,13 +62,13 @@ spark根据application中的action operation会创建不同的jobs，每一个jo
 
   ​	spark的任务调度主要包括stage级的调度和task级的调度，总体调度流程如图：
 
-  <img src="http://sharkdtu.com/images/spark-scheduler-overview.png" alt="spark-scheduler-overview" style="zoom:40%;" />
+  <img src=".assets/spark-scheduler-overview.png" alt="spark-scheduler-overview" style="zoom:40%;" />
 
   
 
 Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后通过action的调用，触发job并调度执行。DAGSchedular负责Stage级的调度，主要是将DAG划分成若干Stages，并将每个Stage打包成TaskSet交给TaskSchedular调度；TaskSchedular负责Task级的调度，将TaskSet按照指定的调度策略分发搭配Executors上执行，调度过程中由SchedulerBackend负责提供可用资源。下面这张图描述了Spark-On-Yarn模式下在任务调度期间，ApplicationMaster、Driver以及Executor内部模块的交互过程。
 
-<img src="http://sharkdtu.com/images/spark-scheduler-detail.png" alt="spark-scheduler-detail" style="zoom:50%;" />
+<img src=".assets/spark-scheduler-detail.png" alt="spark-scheduler-detail" style="zoom:50%;" />
 
 > Driver初始化SparkContext过程中，会分别初始化DAGSchedular、TaskSchedular、SchedulerBackend和HeartbeatReceiver，并启动SchedulerBackend以及HeartbeatReceiver。SchedulerBackend通过ApplicationMaster申请资源，并不断从TaskScheduler中拿到合适的Task分发到Executor执行。HeartbeatReceiver负责接收Executor的心跳信息，监控Executor的存活状况，并通知到TaskScheduler。
 
@@ -78,13 +78,13 @@ Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后
 
 ​		首先了解一下RDD之间的依赖关系，常见的依赖关系主要有以下几种：
 
-![](Spark基本原理.assets/Dependency.png)
+![](.assets/Dependency.png)
 
 ​		前三种是完全依赖，RDD x中的每一个partition都与parent RDD中的partition/partitions相关，最后一个是部分依赖，即RDD x的partition只与parent RDD中的partition中的一部分数据相关。完全依赖也称窄依赖NarrowDependency，部分依赖也称宽依赖WideDependency/ShuffleDependency。
 
 ​		Spark RDD根据RDD之间的依赖关系生成DAG血缘关系图，DAGScheduler会根据DAG之间的依赖关系生成Job逻辑执行图。典型的Job逻辑执行图如图所示：
 
-![](Spark基本原理.assets/GeneralLogicalPlan.png)
+![](.assets/GeneralLogicalPlan.png)
 
 1. 从数据源读取数据创建最初的RDD，ParallelCollectionRDD；
 2. 对RDD进行一系列的transform操作，每一个 transformation() 会产生一个或多个包含不同类型 T 的 RDD[T]。T 可以是 Scala 里面的基本类型或数据结构，不限于 (K, V)。但如果是 (K, V)，K 不能是 Array 等复杂类型（因为难以在复杂类型上定义 partition 函数）。

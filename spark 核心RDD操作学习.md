@@ -1,7 +1,7 @@
 # spark 核心RDD操作学习
 
 [TOC]
-##RDD概念
+## RDD概念
 
 RDD(Resilient Distributed Datasets)，全称弹性式分布数据集，一种分布式的内存抽象，以只读的形式存储在不同的分区中。RDD是只读的，要想生成一个RDD，只能由一个RDD生成或者从文件系统中读取。为此，RDD支持非常丰富的转换操作，如map,join,union等。RDD之间是有依赖关系的，新生成的RDD会记录生成来源，从而形成一张包含依赖关系的有向无环图，即DAG图，该DAG图会包含RDDs间的依赖关系，即血缘关系，每一张DAG图会以action操作结束，即对RDD进行计算，得到相应的结果。可以看出，RDD的操作主要包括两大类，Transform操作和Action操作。Transform操作不会对RDD进行计算，只会记录RDD之间的依赖关系，Action操作会立即触发计算，将从DAG图的源头开始对整个DAG图进行计算。
 常用的transform操作和action操作如下表所示：
@@ -49,7 +49,7 @@ res: [filter]: (数学,95),(数学,90)
 
 对RDD进行去重操作。由于重复数据可能分散在不同的partition里面，因此需要进行shuffle操作，但是shuffle操作需要的是(K, V)类型的数据，因此对于非只有Key的数据，会先用map方法进行转换，K -> (K, Null)，然后利用reduceByKey算子，进行shuffle，首先在map端进行combine去重，然后reduce生成shuffleRDD，再使用mapRepartition()操作进一步去重，生成mapRepartitionRDD，最后只保留key，转换成MappedRDD。
 
-![distinct](spark 核心RDD操作学习.assets/distinct.png)
+![](.assets/distinct.png)
 
 ### 4. flatMap
 
@@ -132,7 +132,7 @@ cogroup是一个pairRDD算子，cogroup可以与两个或多个pairRDD共同进�
 
 RDD a和RDD b经过shuffle算子生成CoGroupedRDD，CoGroupedRDD的partitions可以由用户直接设定，与RDD a和RDD b无关。当且仅当CoGroupedRDD的partitions和partitioner类别（默认为HashPartitioner）均相同时，才会与parent RDDs构成1:1的依赖关系，不进行shuffle操作，否则只能是ShuffleDependency。
 
-![](spark 核心RDD操作学习.assets/cogroup.png)
+![](.assets/cogroup.png)
 
 源码：
 
@@ -175,7 +175,7 @@ Group the values for each key in the RDD into a single sequence. Hash-partitions
 Note:
 **This operation may be very expensive. If you are grouping in order to perform an aggregation (such as a sum or average) over each key, using PairRDDFunctions.aggregateByKey or PairRDDFunctions.reduceByKey will provide much better performance.**
 
-![](spark 核心RDD操作学习.assets/groupByKey.png)
+![](.assets/groupByKey.png)
 
 例子：
 
@@ -189,7 +189,7 @@ res: [rddGroupByKey]: (语文,CompactBuffer(84, 90)),(英语,CompactBuffer(95)),
 ### 9. reduceByKey
 ​		reduceByKey()相当于传统的MapReduce，整个数据流也与Hadoop中的数据流基本一样。首先对输入的RDD进行mapPartitions()操作，类似于MapReduce中的combiner操作，生成mapPartitionsRDD，然后根据key进行shuffle，生成ShuffleRDD，最后再利用aggregate + mapPartitions转换成mapPartitionsRDD，类似于MapReduce上的reduce。利用reduceByKey这一算子可以对RDD进行各种聚合计算，如sum
 
-![](spark 核心RDD操作学习.assets/reduceByKey.png)
+![](.assets/reduceByKey.png)
 
 源码：
 
@@ -305,7 +305,7 @@ def union(other: RDD[T]): RDD[T]
 ```
 Return the union of this RDD and another one. Any identical elements will appear multiple times (use .distinct() to eliminate them).
 
-![](spark 核心RDD操作学习.assets/union.png)
+![](.assets/union.png)
 
 union只将两个RDD简单按照位置合并在一起，并不改变partition里面的数据。
 
@@ -313,7 +313,7 @@ union只将两个RDD简单按照位置合并在一起，并不改变partition里
 
 join()将两个RDD[(K, V)]按照key聚合在一起，与intersection类似，首先使用cogroup方法，得到CoGroupedRDD，然后利用mapValues方法转换成`	<K, (Iterable[V1], Iterable[V2]>`类型的 MappedValuesRDD。然后对Iterable[V1]和Iterable[V2]做笛卡尔集，并使用flatMap()方法扁平化。
 
-![](spark 核心RDD操作学习.assets/join.png)
+![](.assets/join.png)
 
 ```scala
 def join[W](other: RDD[(K, W)]): RDD[(K, (V, W))]
@@ -450,7 +450,7 @@ res: (0,List(3, 6, 9, 12, 15, 18, 21, 24, 27, 30)),(1,List(33, 36, 39, 42, 45, 4
 
 intersection(otherRDD)用于抽取RDD a和RDD b之间的公共数据。首先利用map方法将K转换成(K, V)类型的数据，然后进行cogroup()，再使用filter过滤掉[iter(groupA()), iter(groupB())] 中 groupA 或 groupB 为空的 records，得到 FilteredRDD。最后，使用 keys() 只保留 key 即可，得到 MappedRDD。
 
-![](spark 核心RDD操作学习.assets/intersection.png)
+![](.assets/intersection.png)
 
 
 
@@ -458,7 +458,7 @@ intersection(otherRDD)用于抽取RDD a和RDD b之间的公共数据。首先利
 
 sortByKey() 将 RDD[(K, V)] 中的 records 按 key 排序，ascending = true 表示升序，false 表示降序。目前 sortByKey() 的数据依赖很简单，先使用 shuffle 将 records 聚集在一起（放到对应的 partition 里面），然后将 partition 内的所有 records 按 key 排序，最后得到的 MapPartitionsRDD 中的 records 就有序了。
 
-![](spark 核心RDD操作学习.assets/sortByKey.png)
+![](.assets/sortByKey.png)
 
 ### 19. cartesian
 
@@ -466,7 +466,7 @@ cartesian(otherRDD)， 对两个 RDD 做笛卡尔集，生成的 CartesianRDD �
 
 这里的依赖关系与前面的不太一样，CartesianRDD 中每个partition 依赖两个 parent RDD，而且其中每个 partition 完全依赖 RDD a 中一个 partition，同时又完全依赖 RDD b 中另一个 partition。这里没有红色箭头，因为所有依赖都是 NarrowDependency。
 
-![](spark 核心RDD操作学习.assets/Cartesian.png)
+![](.assets/Cartesian.png)
 
 ### 20. coalesce
 
@@ -474,7 +474,7 @@ coalesce(numPartitions, shuffle=False)
 
 该算子用于对parent RDD中的partition个数进行调整，可以增加或减少，**但是当shuffle为False是只减不增**。
 
-![](spark 核心RDD操作学习.assets/Coalesce.png)
+![](.assets/Coalesce.png)
 
 > coalesce() 的核心问题是**如何确立 CoalescedRDD 中 partition 和其 parent RDD 中 partition 的关系。**
 >
