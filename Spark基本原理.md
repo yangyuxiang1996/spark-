@@ -45,8 +45,8 @@ spark根据application中的action operation会创建不同的jobs，每一个jo
 
 <img src=".assets/spark-submit-time.png" alt="spark-submit-time" style="zoom:80%;" />
 
-		* 用户通过spark-submit提交application后，通过client向ResourceManager请求启动一个Application，同时检查是否有足够的资源满足Application的需求，如果满足，准备ApplicationMaster启动的上下文，交给ResourceManager，并循环监控Application状态。
-		* 当提交的队列资源充分时，ResourceManager会启动ApplicationMaster，ApplicationMaster会单独启动Driver后台进程，Driver进程用于运行Application的main()函数，启动成功后，ApplicationMaster收到连接并开始向ResourceManager申请containers资源，当ResourceManager收到申请后会返回Container资源，并在对应的Container上启动Executor执行单元，执行单元启动成功后由Driver往Executor分发相应的task。
+		* 用户通过spark-submit提交application后，通过client向ResourceManager**请求启动一个Application**，同时检查是否有足够的资源满足Application的需求，如果满足，**准备ApplicationMaster启动的上下文**，交给ResourceManager，并循环监控Application状态。
+		* 当提交的队列资源充分时，ResourceManager**会启动ApplicationMaster**，ApplicationMaster会单独**启动Driver后台进程**，Driver进程用于运行Application的main()函数，启动成功后，ApplicationMaster收到连接并开始向ResourceManager申请containers资源，当ResourceManager收到申请后会返回Container资源，并在对应的Container上启动Executor执行单元，执行单元启动成功后由Driver往Executor分发相应的task。
 
 ​		可以看出，Driver并不直接和Yarn通信，而是通过ApplicationMaster把资源申请的逻辑抽象出来，这样可以适配不同的资源管理系统。Driver进程主要包括完成两项任务：一方面与ApplicationMaster保持通信，通过ApplicationMaster向ResourceManager申请资源，另一方面负责所有Executor的调度以根据业务逻辑完成整个任务。当ResourceManager向ApplicationMaster返回Container资源后，ApplicationMaster会立即在对应的Container上启动Executor进程，Executor进程启动会会注册给Driver，注册成功后会保持与Driver的心跳，同时等到Driver分发任务，当分发的任务执行完毕后，将任务状态上报给Driver。
 
@@ -66,7 +66,7 @@ spark根据application中的action operation会创建不同的jobs，每一个jo
 
   
 
-Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后通过action的调用，触发job并调度执行。DAGSchedular负责Stage级的调度，主要是将DAG划分成若干Stages，并将每个Stage打包成TaskSet交给TaskSchedular调度；TaskSchedular负责Task级的调度，将TaskSet按照指定的调度策略分发搭配Executors上执行，调度过程中由SchedulerBackend负责提供可用资源。下面这张图描述了Spark-On-Yarn模式下在任务调度期间，ApplicationMaster、Driver以及Executor内部模块的交互过程。
+Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后通过action的调用，触发job并调度执行。DAGScheduler负责Stage级的调度，主要是将DAG划分成若干Stages，并将每个Stage打包成TaskSet交给TaskSchedular调度；TaskScheduler负责Task级的调度，将TaskSet按照指定的调度策略分发搭配Executors上执行，调度过程中由SchedulerBackend负责提供可用资源。下面这张图描述了Spark-On-Yarn模式下在任务调度期间，ApplicationMaster、Driver以及Executor内部模块的交互过程。
 
 <img src=".assets/spark-scheduler-detail.png" alt="spark-scheduler-detail" style="zoom:50%;" />
 
@@ -93,9 +93,25 @@ Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后
 
 ### 2.3 Job物理执行图
 
+​		Job的物理执行图是在stage和task层面上来说的，spark对于一个job进行stage划分的准则是：**从后往前回溯推算，遇到 ShuffleDependency 就断开，遇到 NarrowDependency 就将其加入该 stage。每个 stage 里面 task 的数目由该 stage 最后一个 RDD 中的 partition 个数决定。** **如果 stage 最后要产生 result，那么该 stage 里面的 task 都是 ResultTask，否则都是 ShuffleMapTask。** 之所以称为 ShuffleMapTask 是因为其计算结果需要 shuffle 到下一个 stage，本质上相当于 MapReduce 中的 mapper。ResultTask 相当于 MapReduce 中的 reducer（如果需要从 parent stage 那里 shuffle 数据，也相当于普通 mapper（如果该 stage 没有 parent stage。**Job的计算是以pipline形式计算的，数据只有在需要时才会被计算。**
 
+​		下图是WordCount的物理执行图，整个application包含一个job，由saveAsTextFile触发，这个Job由RDD 3和action操作构成，Spark从RDD 3开始回溯搜索，直至没有parent RDD的RDD 0。在回溯的过程中，RDD 3依赖于RDD 2，并且是ShufflDependency的关系，因此在RDD 3和RDD 2之间进行stage的划分，RDD 3被划分到ResultStage，RDD 2继续往前回溯，均为窄依赖，因此RDD 1 和RDD 0直接被加入搭配ShuffleStage中，实际执行的时候，数据记录会一气呵成地执行RDD-0到RDD-2的转化。
 
+![9](.assets/spark-scheduler-dag-wordcount.png)
 
+### 2.4 Job的提交流程
+
+![spark-scheduler-dag-process](.assets/spark-scheduler-dag-process.png)
+
+1. **rdd.action()** 会调用 `DAGScheduler.runJob(rdd, processPartition, resultHandler)` 来生成 job。
+2. **runJob()** 会首先通过`rdd.getPartitions()`来得到 finalRDD 中应该存在的 partition 的个数和类型：Array[Partition]。然后根据 partition 个数 new 出来将来要持有 result 的数组 `Array[Result](partitions.size)`。
+3. 最后调用 DAGScheduler 的`runJob(rdd, cleanedFunc, partitions, allowLocal, resultHandler)`来提交 job。cleanedFunc 是 processParittion 经过闭包清理后的结果，这样可以被序列化后传递给不同节点的 task。
+4. DAGScheduler 的 **runJob** 继续调用`submitJob(rdd, func, partitions, allowLocal, resultHandler)` 来提交 job。
+5. **submitJob()** 首先得到一个 jobId，然后再次包装 func，向 DAGSchedulerEventProcessActor 发送 JobSubmitted 信息，该 actor 收到信息后进一步调用`dagScheduler.handleJobSubmitted()`来处理提交的 job。之所以这么麻烦，是为了符合事件驱动模型。
+6. handleJobSubmmitted() 首先调用 finalStage = newStage() 来划分 stage，然后**submitStage**(finalStage)。由于 finalStage 可能有 parent stages，实际先提交 parent stages，等到他们执行完，finalStage 需要再次提交执行。再次提交由 handleJobSubmmitted() 最后的 **submitWaitingStages**() 负责。
+7. 先确定该 stage 的 missingParentStages，使用`getMissingParentStages(stage)`。如果 parentStages 都可能已经执行过了，那么就为空了。
+8. 如果 missingParentStages 不为空，那么先递归提交 missing 的 parent stages，并将自己加入到 waitingStages 里面，等到 parent stages 执行结束后，会触发提交 waitingStages 里面的 stage。
+9. 如果 missingParentStages 为空，说明该 stage 可以立即执行，那么就调用**submitMissingTasks**(stage, jobId)来生成和提交具体的 task。如果 stage 是 ShuffleMapStage，那么 new 出来与该 stage 最后一个 RDD 的 partition 数相同的 ShuffleMapTasks。如果 stage 是 ResultStage，那么 new 出来与 stage 最后一个 RDD 的 partition 个数相同的 ResultTasks。一个 stage 里面的 task 组成一个 TaskSet，最后调用taskScheduler.**submitTasks**(taskSet)来提交一整个 taskSet。
 
 ## 3 spark性能优化
 

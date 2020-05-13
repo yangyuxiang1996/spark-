@@ -5,7 +5,8 @@
 
 RDD(Resilient Distributed Datasets)，全称弹性式分布数据集，一种分布式的内存抽象，以只读的形式存储在不同的分区中。RDD是只读的，要想生成一个RDD，只能由一个RDD生成或者从文件系统中读取。为此，RDD支持非常丰富的转换操作，如map,join,union等。RDD之间是有依赖关系的，新生成的RDD会记录生成来源，从而形成一张包含依赖关系的有向无环图，即DAG图，该DAG图会包含RDDs间的依赖关系，即血缘关系，每一张DAG图会以action操作结束，即对RDD进行计算，得到相应的结果。可以看出，RDD的操作主要包括两大类，Transform操作和Action操作。Transform操作不会对RDD进行计算，只会记录RDD之间的依赖关系，Action操作会立即触发计算，将从DAG图的源头开始对整个DAG图进行计算。
 常用的transform操作和action操作如下表所示：
-![](http://sharkdtu.com/images/rdd-transformations-actions.png)
+![](.assets/rdd-transformations-actions.png)
+
 ## 1⃣️transform操作
 ```scala
   val rdd = sc.makeRDD(Seq(("数学", 95), ("语文", 84), ("英语", 95), ("数学", 90), ("语文", 90)))
@@ -474,7 +475,7 @@ coalesce(numPartitions, shuffle=False)
 
 该算子用于对parent RDD中的partition个数进行调整，可以增加或减少，**但是当shuffle为False是只减不增**。
 
-![](.assets/Coalesce.png)
+![](.assets/Coalesce-9267910.png)
 
 > coalesce() 的核心问题是**如何确立 CoalescedRDD 中 partition 和其 parent RDD 中 partition 的关系。**
 >
