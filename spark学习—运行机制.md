@@ -23,6 +23,8 @@
 
 ## 2 spark运行机制
 
+![img](.assets/1f1ddad5.png)
+
 一些常见的专业术语:
 
 - application：应用程序，由用户创建的spark程序，如WordCount.scala；
@@ -45,12 +47,12 @@ spark根据application中的action operation会创建不同的jobs，每一个jo
 
 <img src=".assets/spark-submit-time.png" alt="spark-submit-time" style="zoom:80%;" />
 
-		* 用户通过spark-submit提交application后，通过client向ResourceManager**请求启动一个Application**，同时检查是否有足够的资源满足Application的需求，如果满足，**准备ApplicationMaster启动的上下文**，交给ResourceManager，并循环监控Application状态。
-		* 当提交的队列资源充分时，ResourceManager**会启动ApplicationMaster**，ApplicationMaster会单独**启动Driver后台进程**，Driver进程用于运行Application的main()函数，启动成功后，ApplicationMaster收到连接并开始向ResourceManager申请containers资源，当ResourceManager收到申请后会返回Container资源，并在对应的Container上启动Executor执行单元，执行单元启动成功后由Driver往Executor分发相应的task。
+* 用户通过spark-submit提交application后，通过client向ResourceManager**请求启动一个Application**，同时检查是否有足够的资源满足Application的需求，如果满足，**准备ApplicationMaster启动的上下文**，交给ResourceManager，并循环监控Application状态。
+* 当提交的队列资源充分时，ResourceManager**会启动ApplicationMaster**，ApplicationMaster会单独**启动Driver后台进程**，Driver进程用于运行Application的main()函数，启动成功后，ApplicationMaster收到连接并开始向ResourceManager申请containers资源，当ResourceManager收到申请后会返回Container资源，并在对应的Container上启动Executor执行单元，执行单元启动成功后由Driver往Executor分发相应的task。		
 
-​		可以看出，Driver并不直接和Yarn通信，而是通过ApplicationMaster把资源申请的逻辑抽象出来，这样可以适配不同的资源管理系统。Driver进程主要包括完成两项任务：一方面与ApplicationMaster保持通信，通过ApplicationMaster向ResourceManager申请资源，另一方面负责所有Executor的调度以根据业务逻辑完成整个任务。当ResourceManager向ApplicationMaster返回Container资源后，ApplicationMaster会立即在对应的Container上启动Executor进程，Executor进程启动会会注册给Driver，注册成功后会保持与Driver的心跳，同时等到Driver分发任务，当分发的任务执行完毕后，将任务状态上报给Driver。
+可以看出，Driver并不直接和Yarn通信，而是通过ApplicationMaster把资源申请的逻辑抽象出来，这样可以适配不同的资源管理系统。Driver进程主要包括完成两项任务：一方面与ApplicationMaster保持通信，通过ApplicationMaster向ResourceManager申请资源，另一方面负责所有Executor的调度以根据业务逻辑完成整个任务。当ResourceManager向ApplicationMaster返回Container资源后，ApplicationMaster会立即在对应的Container上启动Executor进程，Executor进程启动会会注册给Driver，注册成功后会保持与Driver的心跳，同时等到Driver分发任务，当分发的任务执行完毕后，将任务状态上报给Driver。
 
-		### 2.1 任务调度
+### 2.1 任务调度
 
 ​		当Executor向Driver注册成功后，Driver会根据用户的代码逻辑进行任务的准备和分发。这一过程涉及到了job、stage和task三个概念：
 
@@ -71,8 +73,6 @@ Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后
 <img src=".assets/spark-scheduler-detail.png" alt="spark-scheduler-detail" style="zoom:50%;" />
 
 > Driver初始化SparkContext过程中，会分别初始化DAGSchedular、TaskSchedular、SchedulerBackend和HeartbeatReceiver，并启动SchedulerBackend以及HeartbeatReceiver。SchedulerBackend通过ApplicationMaster申请资源，并不断从TaskScheduler中拿到合适的Task分发到Executor执行。HeartbeatReceiver负责接收Executor的心跳信息，监控Executor的存活状况，并通知到TaskScheduler。
-
-
 
 ### 2.2 Job逻辑执行图
 
@@ -112,18 +112,6 @@ Spark RDD通过其Transaction操作，形成RDD血缘关系图，即DAG，最后
 7. 先确定该 stage 的 missingParentStages，使用`getMissingParentStages(stage)`。如果 parentStages 都可能已经执行过了，那么就为空了。
 8. 如果 missingParentStages 不为空，那么先递归提交 missing 的 parent stages，并将自己加入到 waitingStages 里面，等到 parent stages 执行结束后，会触发提交 waitingStages 里面的 stage。
 9. 如果 missingParentStages 为空，说明该 stage 可以立即执行，那么就调用**submitMissingTasks**(stage, jobId)来生成和提交具体的 task。如果 stage 是 ShuffleMapStage，那么 new 出来与该 stage 最后一个 RDD 的 partition 数相同的 ShuffleMapTasks。如果 stage 是 ResultStage，那么 new 出来与 stage 最后一个 RDD 的 partition 个数相同的 ResultTasks。一个 stage 里面的 task 组成一个 TaskSet，最后调用taskScheduler.**submitTasks**(taskSet)来提交一整个 taskSet。
-
-## 3 spark性能优化
-
-### shuffle操作
-
-### checkpoint
-
-### cache
-
-
-
-
 
 参考链接：[Spark Scheduler内部原理剖析](http://sharkdtu.com/posts/spark-scheduler.html)
 
